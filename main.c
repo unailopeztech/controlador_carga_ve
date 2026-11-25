@@ -70,6 +70,7 @@ volatile float Vpulso;
 volatile uint8_t adc_listo=0;
 volatile uint16_t adc_raw;
 volatile uint32_t canal = ADC_CHANNEL_0;
+volatile uint8_t toca_leer_a1 = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -99,6 +100,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 uint32_t adc_binary1;
 uint32_t volts_mv1;
 
+uint32_t t_ultimo = 0;
+uint32_t t_led = 0;
 
 /* USER CODE END 0 */
 
@@ -162,8 +165,16 @@ int main(void)
 
 	  		  HAL_GPIO_WritePin(led_verde_GPIO_Port, led_verde_Pin, GPIO_PIN_RESET);
 	  		  HAL_GPIO_WritePin(led_rojo_GPIO_Port, led_rojo_Pin, GPIO_PIN_RESET);
-	  		  HAL_GPIO_TogglePin(led_azul_GPIO_Port, led_azul_Pin);
-	  		  HAL_Delay(500);
+
+	  		  //HAL_Delay(500);
+	  		  if(HAL_GetTick() - t_led >= 500)// ha pasado 0.5 segundo?
+	  			  {
+
+	  			  		  t_led = HAL_GetTick(); //siguiente instante, sin deriva
+	  			  		  //tarea de cada medio segundo
+	  			  		  HAL_GPIO_TogglePin(led_azul_GPIO_Port, led_azul_Pin);
+
+	  			  }
 	  		if(adc_pulso > 4000)estado=EST_A;
 	  		if(autorizado && Vpulso>1.24)estado=EST_C;
 	  		if(autorizado && Vpulso<1.21 && Vpulso>0.41)estado=EST_D;
@@ -199,7 +210,7 @@ int main(void)
   }
   HAL_UART_Receive_IT(&huart2, &byte_rx, 2);
 
-  uint32_t t_ultimo   = HAL_GetTick();
+   t_ultimo   = HAL_GetTick();
   //uint32_t t_5s   = HAL_GetTick();
   /* USER CODE END 2 */
 
@@ -214,32 +225,46 @@ int main(void)
 	  }
 	  maquina_estados();
 
+	  if((HAL_GetTick() - t_ultimo >= 1000)&& !toca_leer_a1)// ha pasado 1 segundo?
+	  {
+
+	  		  t_ultimo = HAL_GetTick(); //siguiente instante, sin deriva
+	  		  //tarea de cada segundo
+	  		  toca_leer_a1 = 1;
+
+	  }
+
 	  if(adc_listo){
 		  adc_listo = 0;
-		  if(canal==ADC_CHANNEL_1){
+
+		  if(canal==ADC_CHANNEL_1)
+		  {
 			  adc_binary1 = adc_raw;
 			  Vtemp = adc_to_mv(adc_binary1);
 			  temperatura = (Vtemp - 500) / 10;
+			  //ya leimos temperatura, volvemos a pa0 para la siguiente conversion del timer
+			  canal = ADC_CHANNEL_0;
+			  cambiar_canal(canal);
 
 		  }
-		  else if (canal == ADC_CHANNEL_0){
+		  else
+		  {
 			  adc_pulso = adc_raw;
-			  Vpulso = adc_pulso * 3.3 /3700;
+			  Vpulso = adc_to_mv(adc_pulso);
 
+			  //si pasó 1 segundo, cambiamos a pa1 la siguiente conversion
+			  		  if(toca_leer_a1){
+			  			  toca_leer_a1 = 0,
+			  			  canal = ADC_CHANNEL_1;
+			  			  cambiar_canal(canal);
+			  		  }
 		  }
-		  canal = ADC_CHANNEL_0;
 
-		 // HAL_ADC_Stop_IT(&hadc1);
+
+		  HAL_ADC_Start_IT(&hadc1);
 	  }
 
-	  if(HAL_GetTick() - t_ultimo >= 1000){// ha pasado 1 segundo?
-		  t_ultimo = HAL_GetTick(); //siguiente instante, sin deriva
-		  //tarea de cada segundo
-		  canal = ADC_CHANNEL_1;
-		  cambiar_canal(canal);
-//
 
-	  }
 	//  if(temperatura > 50){
 	//	  if(HAL_GetTick() - t_5s >= 5000){// ha pasado 5 segundos?
 	//	  		  t_5s = HAL_GetTick(); //siguiente instante, sin deriva
@@ -514,6 +539,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 		adc_raw = HAL_ADC_GetValue(hadc);
 
 		adc_listo = 1; // solo leer y avisar
+
+		HAL_ADC_Stop_IT(hadc);
 	}
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){

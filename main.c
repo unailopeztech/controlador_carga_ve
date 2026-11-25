@@ -68,6 +68,8 @@ volatile uint8_t flag_linea_lista = 0;    /* 1: hay una línea completa (la pone
 volatile uint16_t adc_pulso;
 volatile float Vpulso;
 volatile uint8_t adc_listo=0;
+volatile uint16_t adc_raw;
+volatile uint32_t canal = ADC_CHANNEL_0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -198,6 +200,7 @@ int main(void)
   HAL_UART_Receive_IT(&huart2, &byte_rx, 2);
 
   uint32_t t_ultimo   = HAL_GetTick();
+  //uint32_t t_5s   = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -213,20 +216,33 @@ int main(void)
 
 	  if(adc_listo){
 		  adc_listo = 0;
-		  Vpulso = adc_pulso * 3.3 /3700;
+		  if(canal==ADC_CHANNEL_1){
+			  adc_binary1 = adc_raw;
+			  Vtemp = adc_to_mv(adc_binary1);
+			  temperatura = (Vtemp - 500) / 10;
+
+		  }
+		  else if (canal == ADC_CHANNEL_0){
+			  adc_pulso = adc_raw;
+			  Vpulso = adc_pulso * 3.3 /3700;
+
+		  }
+		  canal = ADC_CHANNEL_0;
+
 		 // HAL_ADC_Stop_IT(&hadc1);
 	  }
 
-//	  if(HAL_GetTick() - t_ultimo >= 1000){// ha pasado 1 segundo?
-//		  t_ultimo = HAL_GetTick(); //siguiente instante, sin deriva
+	  if(HAL_GetTick() - t_ultimo >= 1000){// ha pasado 1 segundo?
+		  t_ultimo = HAL_GetTick(); //siguiente instante, sin deriva
 		  //tarea de cada segundo
-//		  adc_binary1 = read_channel(ADC_CHANNEL_1);
-//		  Vtemp = adc_to_mv(adc_binary1);
-//		  temperatura = (Vtemp - 500) / 10;
-//	  }
+		  canal = ADC_CHANNEL_1;
+		  cambiar_canal(canal);
+//
+
+	  }
 	//  if(temperatura > 50){
-	//	  if(HAL_GetTick() - t_ultimo >= 5000){// ha pasado 1 segundo?
-	//	  		  t_ultimo += 5000; //siguiente instante, sin deriva
+	//	  if(HAL_GetTick() - t_5s >= 5000){// ha pasado 5 segundos?
+	//	  		  t_5s = HAL_GetTick(); //siguiente instante, sin deriva
 	//	  }
 	  //}
 
@@ -494,7 +510,8 @@ static void MX_GPIO_Init(void)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
 	if (hadc->Instance == ADC1) {
-		adc_pulso = HAL_ADC_GetValue(hadc);
+
+		adc_raw = HAL_ADC_GetValue(hadc);
 
 		adc_listo = 1; // solo leer y avisar
 	}

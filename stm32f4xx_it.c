@@ -43,6 +43,7 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 volatile uint16_t I = 6;
+volatile uint16_t duty = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -241,11 +242,12 @@ void EXTI9_5_IRQHandler(void)
 void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
+
 	if(TIM3->SR & TIM_SR_UIF){
 		TIM3->SR = ~TIM_SR_UIF;
-		static uint16_t duty = 0;
-		duty = I * 1000 / 60;
-		TIM3->CCR1 = duty;
+
+		duty = I * 10 / 6;
+		TIM3->CCR1 = duty*10;
 		TIM3->CCR2 = duty/2;
 	}
   /* USER CODE END TIM3_IRQn 0 */

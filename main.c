@@ -22,6 +22,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "leerADC.h"
 /* USER CODE END Includes */
 
@@ -71,6 +73,8 @@ volatile uint8_t adc_listo=0;
 volatile uint16_t adc_raw;
 volatile uint32_t canal = ADC_CHANNEL_0;
 volatile uint8_t toca_leer_a1 = 0;
+extern volatile uint16_t duty;
+static char tx_buf[48];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -212,6 +216,7 @@ int main(void)
 
    t_ultimo   = HAL_GetTick();
   //uint32_t t_5s   = HAL_GetTick();
+   uint32_t last = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -250,7 +255,7 @@ int main(void)
 		  else
 		  {
 			  adc_pulso = adc_raw;
-			  Vpulso = adc_to_mv(adc_pulso);
+			  Vpulso = adc_to_mv(adc_pulso) / 1000.0;
 
 			  //si pasó 1 segundo, cambiamos a pa1 la siguiente conversion
 			  		  if(toca_leer_a1){
@@ -264,6 +269,20 @@ int main(void)
 		  HAL_ADC_Start_IT(&hadc1);
 	  }
 
+
+	  if(HAL_GetTick() - last >= 50)
+	  {
+		  last = HAL_GetTick();
+		  if (huart2.gState == HAL_UART_STATE_READY)
+		  {
+			  uint32_t vpot_mv = (uint32_t)(Vpulso * 1000.0f); // 1.65 V → 1650 mV, sin %f
+
+			  int n = snprintf(tx_buf, sizeof(tx_buf), "duty=%u porciento vpot=%lu mV I=%u A\r\n",
+					  (unsigned)duty, vpot_mv, (unsigned)I);
+
+			  HAL_UART_Transmit_IT(&huart2, (uint8_t *)tx_buf, n);
+		  }
+	  }
 
 	//  if(temperatura > 50){
 	//	  if(HAL_GetTick() - t_5s >= 5000){// ha pasado 5 segundos?
@@ -563,6 +582,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	    HAL_UART_Receive_IT(&huart2, &byte_rx, 1);              /* volver a armar */
 	  }
   }
+//void HAL_UART_TxCpltCallback(){
+	//tx_done = 1;
+//}
   void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   {
 	  if (huart == &huart2)
